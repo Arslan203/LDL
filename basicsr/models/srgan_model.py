@@ -4,6 +4,7 @@ from collections import OrderedDict
 from basicsr.archs import build_network
 from basicsr.losses import build_loss
 from basicsr.utils import get_root_logger
+from basicsr.metrics import calculate_metric
 from basicsr.utils.registry import MODEL_REGISTRY
 from .sr_model import SRModel
 
@@ -45,21 +46,35 @@ class SRGANModel(SRModel):
         # define losses
         if train_opt.get('pixel_opt'):
             self.cri_pix = build_loss(train_opt['pixel_opt']).to(self.device)
+            self.log_dict['l_g_pix'] = 0
         else:
             self.cri_pix = None
 
         if train_opt.get('artifacts_opt'):
             self.cri_artifacts = build_loss(train_opt['artifacts_opt']).to(self.device)
+            self.log_dict['l_g_artifacts'] = 0
         else:
             self.cri_artifacts = None
 
         if train_opt.get('perceptual_opt'):
             self.cri_perceptual = build_loss(train_opt['perceptual_opt']).to(self.device)
+            self.log_dict['l_g_percep'] = 0
+            if self.cri_perceptual.style_weight > 0:
+                self.log_dict['l_g_style'] = 0
         else:
             self.cri_perceptual = None
 
         if train_opt.get('gan_opt'):
             self.cri_gan = build_loss(train_opt['gan_opt']).to(self.device)
+            self.log_dict['l_g_gan'] = 0
+            self.log_dict['l_d_real'] = 0
+            self.log_dict['out_d_real'] = 0
+            self.log_dict['l_d_fake'] = 0
+            self.log_dict['out_d_fake'] = 0
+        
+        self.with_metrics = self.opt['train'].get('metrics') is not None
+        if self.with_metrics:
+            self.metric_results = {metric: 0 for metric in self.opt['train']['metrics'].keys()}
 
         self.net_d_iters = train_opt.get('net_d_iters', 1)
         self.net_d_init_iters = train_opt.get('net_d_init_iters', 0)
@@ -132,7 +147,8 @@ class SRGANModel(SRModel):
         l_d_fake.backward()
         self.optimizer_d.step()
 
-        self.log_dict = self.reduce_loss_dict(loss_dict)
+        loss_dict |= self.calculate_metrics_on_iter()
+        self.reduce_loss_dict(loss_dict)
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)
@@ -144,3 +160,12 @@ class SRGANModel(SRModel):
             self.save_network(self.net_g, 'net_g', current_iter)
         self.save_network(self.net_d, 'net_d', current_iter)
         self.save_training_state(epoch, current_iter)
+
+    def calculate_metrics_on_iter(self):
+        if self.with_metrics:
+            # calculate metrics
+            for name, opt_ in self.opt['val']['metrics'].items():
+                metric_data = dict(img1=self.output, img2=self.gt)
+                self.metric_results[name] = calculate_metric(metric_data, opt_)
+            return self.metric_results
+        return dict()

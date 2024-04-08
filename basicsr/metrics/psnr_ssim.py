@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+import lpips
+import torch
 
 from basicsr.metrics.metric_util import reorder_image, to_y_channel
 from basicsr.utils.registry import METRIC_REGISTRY
@@ -126,3 +128,17 @@ def calculate_ssim(img1, img2, crop_border, input_order='HWC', test_y_channel=Fa
     for i in range(img1.shape[2]):
         ssims.append(_ssim(img1[..., i], img2[..., i]))
     return np.array(ssims).mean()
+
+class LPIPSwrapper:
+    def __init__(self, *args, **kwargs):
+        self.main = lpips.LPIPS(*args, **kwargs)
+    def __call__(self, x, trg, **kwargs):
+        reduction = kwargs.pop('reduction', 'mean')
+        res = self.main(x, trg)
+        if reduction == 'mean':
+            res = torch.mean(res)
+        elif reduction == 'sum':
+            res = torch.sum(res)
+        return res.item()
+    
+METRIC_REGISTRY.register()(LPIPSwrapper())

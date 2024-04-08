@@ -9,7 +9,7 @@ from basicsr.data import build_dataloader, build_dataset
 from basicsr.data.data_sampler import EnlargedSampler
 from basicsr.data.prefetch_dataloader import CPUPrefetcher, CUDAPrefetcher
 from basicsr.models import build_model
-from basicsr.utils import (MessageLogger, check_resume, get_env_info, get_root_logger, get_time_str, init_tb_logger,
+from basicsr.utils import (MessageLogger, SamplesLogger, check_resume, get_env_info, get_root_logger, get_time_str, init_tb_logger,
                            init_wandb_logger, make_exp_dirs, mkdir_and_rename, scandir)
 from basicsr.utils.options import dict2str, parse_options
 
@@ -132,6 +132,9 @@ def train_pipeline(root_path):
     # create message logger (formatted outputs)
     msg_logger = MessageLogger(opt, current_iter, tb_logger)
 
+    # create samples demo
+    samples_logger = SamplesLogger(opt, current_iter, tb_logger, train_loader=train_loader, val_loader=val_loader)
+
     # dataloader prefetcher
     prefetch_mode = opt['datasets']['train'].get('prefetch_mode')
     if prefetch_mode is None or prefetch_mode == 'cpu':
@@ -171,8 +174,14 @@ def train_pipeline(root_path):
                 log_vars = {'epoch': epoch, 'iter': current_iter}
                 log_vars.update({'lrs': model.get_current_learning_rate()})
                 log_vars.update({'time': iter_time, 'data_time': data_time})
-                log_vars.update(model.get_current_log())
+                log_vars.update(model.get_current_log_reset(step_size = opt['logger']['print_freq']))
                 msg_logger(log_vars)
+
+            # log samples
+            # if current_iter % opt['logger']['samples']['samples_freq'] == 0:
+            #     log_vars = {'iter': current_iter}
+            #     log_vars.update(model.get_samples_visualise(samples_logger.to_draw))
+            #     samples_logger(log_vars)
 
             # save models and training states
             if current_iter % opt['logger']['save_checkpoint_freq'] == 0:

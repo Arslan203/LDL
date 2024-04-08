@@ -3,6 +3,7 @@ from collections import OrderedDict
 
 from basicsr.utils.registry import MODEL_REGISTRY
 from .srgan_model import SRGANModel
+from basicsr.metrics import calculate_metric
 from basicsr.losses.LDL_loss import get_refined_artifact_map
 
 @MODEL_REGISTRY.register()
@@ -76,7 +77,9 @@ class ESRGANArtifactsDisModel(SRGANModel):
         loss_dict['out_d_real'] = torch.mean(real_d_pred.detach())
         loss_dict['out_d_fake'] = torch.mean(fake_d_pred.detach())
 
-        self.log_dict = self.reduce_loss_dict(loss_dict)
+        loss_dict |= self.calculate_metrics_on_iter()
+
+        self.reduce_loss_dict(loss_dict)
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)

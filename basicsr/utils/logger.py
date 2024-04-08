@@ -1,6 +1,7 @@
 import datetime
 import logging
 import time
+import torch
 
 from .dist_util import get_dist_info, master_only
 
@@ -75,6 +76,82 @@ class MessageLogger():
                 else:
                     self.tb_logger.add_scalar(k, v, current_iter)
         self.logger.info(message)
+
+
+class SamplesLogger():
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+    def __call__(self, *args: logging.Any, **kwds: logging.Any) -> logging.Any:
+        pass
+# class SamplesLogger():
+#     def __init__(self, opt, start_iter=1, tb_logger=None, **kwargs):
+#         self.exp_name = opt['name']
+#         self.interval = opt['logger']['samples']['samples_freq']
+#         self.start_iter = start_iter
+#         self.max_iters = opt['train']['total_iter']
+#         self.use_tb_logger = opt['logger']['use_tb_logger']
+#         self.tb_logger = tb_logger
+
+#         train_loader, val_loader = kwargs.get('train_loader', None), kwargs.get('val_loader', None)
+#         train_samples = torch.randint(len(train_loader.dataset), (opt['logger']['samples']['samples_train'], ))
+#         test_samples = torch.randint(len(val_loader.dataset), (opt['logger']['samples']['samples_train'], ))
+        
+#         train_samples_data = [train_loader.dataset[i] for i in train_samples]
+#         test_samples_data = [val_loader.dataset[i] for i in test_samples]
+
+#         self.to_draw = {'tr_samples':train_samples, 'tt_samples':test_samples,
+#                     'tr_images': torch.stack([sample[0] for sample in train_samples_data]),
+#                     'tt_images': torch.stack([sample[0] for sample in test_samples_data]),
+#                     'tr_masks': torch.stack([sample[1] for sample in train_samples_data]),
+#                     'tt_masks': torch.stack([sample[1] for sample in test_samples_data]),
+#                 }
+
+
+#     @master_only
+#     def __call__(self, log_vars):
+#         """Format logging message.
+
+#         Args:
+#             log_vars (dict): It contains the following keys:
+#                 epoch (int): Epoch number.
+#                 iter (int): Current iter.
+#                 lrs (list): List for learning rates.
+
+#                 time (float): Iter time.
+#                 data_time (float): Data time for each iter.
+#         """
+#         # epoch, iter, learning rates
+#         epoch = log_vars.pop('epoch')
+#         current_iter = log_vars.pop('iter')
+#         lrs = log_vars.pop('lrs')
+
+#         message = (f'[{self.exp_name[:5]}..][epoch:{epoch:3d}, ' f'iter:{current_iter:8,d}, lr:(')
+#         for v in lrs:
+#             message += f'{v:.3e},'
+#         message += ')] '
+
+#         # time and estimated time
+#         if 'time' in log_vars.keys():
+#             iter_time = log_vars.pop('time')
+#             data_time = log_vars.pop('data_time')
+
+#             total_time = time.time() - self.start_time
+#             time_sec_avg = total_time / (current_iter - self.start_iter + 1)
+#             eta_sec = time_sec_avg * (self.max_iters - current_iter - 1)
+#             eta_str = str(datetime.timedelta(seconds=int(eta_sec)))
+#             message += f'[eta: {eta_str}, '
+#             message += f'time (data): {iter_time:.3f} ({data_time:.3f})] '
+
+#         # other items, especially losses
+#         for k, v in log_vars.items():
+#             message += f'{k}: {v:.4e} '
+#             # tensorboard logger
+#             if self.use_tb_logger and 'debug' not in self.exp_name:
+#                 if k.startswith('l_'):
+#                     self.tb_logger.add_scalar(f'losses/{k}', v, current_iter)
+#                 else:
+#                     self.tb_logger.add_scalar(k, v, current_iter)
+#         self.logger.info(message)
 
 
 @master_only

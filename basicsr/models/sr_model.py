@@ -67,6 +67,10 @@ class SRModel(BaseModel):
         if self.cri_pix is None and self.cri_perceptual is None:
             raise ValueError('Both pixel and perceptual losses are None.')
 
+        self.with_metrics = self.opt['train'].get('metrics') is not None
+        if self.with_metrics:
+            self.metric_results = {metric: 0 for metric in self.opt['train']['metrics'].keys()}
+        
         # set up optimizers and schedulers
         self.setup_optimizers()
         self.setup_schedulers()
@@ -115,7 +119,7 @@ class SRModel(BaseModel):
         l_total.backward()
         self.optimizer_g.step()
 
-        self.log_dict = self.reduce_loss_dict(loss_dict)
+        self.reduce_loss_dict(loss_dict)
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)
@@ -210,3 +214,77 @@ class SRModel(BaseModel):
         else:
             self.save_network(self.net_g, 'net_g', current_iter)
         self.save_training_state(epoch, current_iter)
+
+    # def get_samples_visualise(self, imdict):
+    #     network = self.net_g_ema if hasattr(self, 'net_g_ema') else self.net_g
+    #     device = torch.device('cuda' if self.opt['num_gpu'] != 0 else 'cpu')
+    #     inp = torch.cat((imdict['tr_images'], imdict['tt_images']), dim=0).to(device)
+    #     masks = torch.cat((imdict['tr_masks'], imdict['tt_masks']), dim=0).to(device)
+    #     network.eval()
+    #     logits = network(inp)[0]
+    #     samples_size = imdict['tr_samples'].size(0)
+    #     fig_tr, ax_tr = plt.subplots(samples_size, 3, figsize = (15, 7))
+
+    #     for sample in range(samples_size):
+    #         image = imdict['tr_images'][sample]
+    #         mask = imdict['tr_masks'][sample].to(device)
+    #         sr = logits[sample]
+            
+    #         metrics_eval = [f'{metric_names[i]} = {round(metr(mask.unsqueeze(0), sr.unsqueeze(0)).item(), 3)}' for i, metr in enumerate(metrics)]
+    #         image = image.permute(1, 2, 0).numpy()
+            
+    #         mask = mask.cpu().permute(1, 2, 0).numpy()
+            
+    #         sr = sr.cpu().permute(1, 2, 0).numpy()
+            
+    #         fig_tr.suptitle('; '.join(metrics_eval))
+            
+    #         ax_tr[sample, 0].set_title('LR_train')
+    #         ax_tr[sample, 1].set_title('HR_train')
+    #         ax_tr[sample, 2].set_title('SR_train')
+
+    #         ax_tr[sample, 0].imshow(image)
+    #         ax_tr[sample, 1].imshow(mask)
+    #         ax_tr[sample, 2].imshow(sr)
+
+    #         ax_tr[sample, 0].set_axis_off()
+    #         ax_tr[sample, 1].set_axis_off()
+    #         ax_tr[sample, 2].set_axis_off()
+
+    #     fig_tr.tight_layout()
+
+    #     # writer.add_figure('train/samples', fig_tr, epoch)
+
+
+    #     fig_tt, ax_tt = plt.subplots(samples_size, 3, figsize = (15, 7))
+
+    #     for sample in range(samples_size):
+    #         image = imdict['tt_images'][sample]
+    #         mask = imdict['tt_masks'][sample].to(device)
+    #         sr = logits[samples_size + sample]
+            
+    #         metrics_eval = [f'{metric_names[i]} = {round(metr(mask.unsqueeze(0), sr.unsqueeze(0)).item(), 3)}' for i, metr in enumerate(metrics)]
+    #         image = image.permute(1, 2, 0).numpy()
+            
+    #         mask = mask.cpu().permute(1, 2, 0).numpy()
+            
+    #         sr = sr.cpu().permute(1, 2, 0).numpy()
+            
+    #         fig_tt.suptitle('; '.join(metrics_eval))
+            
+    #         ax_tt[sample, 0].set_title('LR_test')
+    #         ax_tt[sample, 1].set_title('HR_test')
+    #         ax_tt[sample, 2].set_title('SR_test')
+
+    #         ax_tt[sample, 0].imshow(image)
+    #         ax_tt[sample, 1].imshow(mask)
+    #         ax_tt[sample, 2].imshow(sr)
+
+    #         ax_tt[sample, 0].set_axis_off()
+    #         ax_tt[sample, 1].set_axis_off()
+    #         ax_tt[sample, 2].set_axis_off()
+
+    #     fig_tt.tight_layout()
+
+    #     # writer.add_figure('test/samples', fig_tt, epoch)
+    #     return fig_tr, fig_tt

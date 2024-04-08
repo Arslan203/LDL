@@ -19,6 +19,7 @@ class BaseModel():
         self.is_train = opt['is_train']
         self.schedulers = []
         self.optimizers = []
+        self.log_dict = OrderedDict()
 
     def feed_data(self, data):
         pass
@@ -54,8 +55,12 @@ class BaseModel():
         for k in net_g_ema_params.keys():
             net_g_ema_params[k].data.mul_(decay).add_(net_g_params[k].data, alpha=1 - decay)
 
-    def get_current_log(self):
-        return self.log_dict
+    def get_current_log_reset(self, step_size=1):
+        res = self.log_dict
+        self.log_dict = OrderedDict({key: 0 for key in res.keys()})
+        for key, val in res.items():
+            res[key] = val / step_size
+        return res
 
     def model_to_device(self, net):
         """Model to device. It also warps models with DistributedDataParallel
@@ -349,8 +354,8 @@ class BaseModel():
                     losses /= self.opt['world_size']
                 loss_dict = {key: loss for key, loss in zip(keys, losses)}
 
-            log_dict = OrderedDict()
+            # log_dict = OrderedDict()
             for name, value in loss_dict.items():
-                log_dict[name] = value.mean().item()
+                self.log_dict[name] += value.mean().item()
 
-            return log_dict
+            # return log_dict

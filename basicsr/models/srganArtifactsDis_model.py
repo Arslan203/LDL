@@ -44,24 +44,36 @@ class SRGANArtifactsDisModel(SRModel):
         self.net_g.train()
         self.net_d.train()
 
+        self.log_dict = OrderedDict()
+
         # define losses
         if train_opt.get('pixel_opt'):
             self.cri_pix = build_loss(train_opt['pixel_opt']).to(self.device)
+            self.log_dict['l_g_pix'] = 0
         else:
             self.cri_pix = None
 
         if train_opt.get('artifacts_opt'):
             self.cri_artifacts = build_loss(train_opt['artifacts_opt']).to(self.device)
+            self.log_dict['l_g_artifacts'] = 0
         else:
             self.cri_artifacts = None
 
         if train_opt.get('perceptual_opt'):
             self.cri_perceptual = build_loss(train_opt['perceptual_opt']).to(self.device)
+            self.log_dict['l_g_percep'] = 0
+            if self.cri_perceptual.style_weight > 0:
+                self.log_dict['l_g_style'] = 0
         else:
             self.cri_perceptual = None
 
         if train_opt.get('gan_opt'):
             self.cri_gan = build_loss(train_opt['gan_opt']).to(self.device)
+            self.log_dict['l_g_gan'] = 0
+            self.log_dict['l_d_real'] = 0
+            self.log_dict['out_d_real'] = 0
+            self.log_dict['l_d_fake'] = 0
+            self.log_dict['out_d_fake'] = 0
 
         self.net_d_iters = train_opt.get('net_d_iters', 1)
         self.net_d_init_iters = train_opt.get('net_d_init_iters', 0)
@@ -142,7 +154,7 @@ class SRGANArtifactsDisModel(SRModel):
         l_d_fake.backward()
         self.optimizer_d.step()
 
-        self.log_dict = self.reduce_loss_dict(loss_dict)
+        self.reduce_loss_dict(loss_dict)
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)
