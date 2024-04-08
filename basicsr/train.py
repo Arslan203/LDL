@@ -178,10 +178,10 @@ def train_pipeline(root_path):
                 msg_logger(log_vars)
 
             # log samples
-            # if current_iter % opt['logger']['samples']['samples_freq'] == 0:
-            #     log_vars = {'iter': current_iter}
-            #     log_vars.update(model.get_samples_visualise(samples_logger.to_draw))
-            #     samples_logger(log_vars)
+            if current_iter % opt['logger']['samples']['samples_freq'] == 0:
+                log_vars = {'iter': current_iter}
+                log_vars.update(model.get_samples_visualise(samples_logger.samples_info))
+                samples_logger(log_vars)
 
             # save models and training states
             if current_iter % opt['logger']['save_checkpoint_freq'] == 0:

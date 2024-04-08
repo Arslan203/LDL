@@ -1,3 +1,4 @@
+%%writefile /content/LDL/scripts/data_preparation/create_lmdb.py
 import argparse
 from os import path as osp
 
@@ -28,15 +29,27 @@ def create_lmdb_for_div2k():
     # img_path_list, keys = prepare_keys_fivek(folder_path)
     # make_lmdb_from_imgs(folder_path, lmdb_path, img_path_list, keys)
 
-    # # HR images
-    # folder_path = 'datasets/DIV2K/DIV2K_train_HR_sub'
-    # lmdb_path = 'datasets/DIV2K/DIV2K_train_HR_sub.lmdb'
-    # img_path_list, keys = prepare_keys_div2k(folder_path)
-    # make_lmdb_from_imgs(folder_path, lmdb_path, img_path_list, keys)
+    # HR images
+    folder_path = '/content/test'
+    lmdb_path = '/content/LDL/datasets/test128.lmdb'
+    img_path_list, keys = prepare_keys_div2k(folder_path)
+    make_lmdb_from_imgs(folder_path, lmdb_path, img_path_list, keys)
     #
     # # LRx2 images
-    folder_path = 'datasets/DF2K/LRbicx2_sub'
-    lmdb_path = 'datasets/DF2K/LRbicx2_sub.lmdb'
+    folder_path = '/content/test_LR'
+    lmdb_path = '/content/LDL/datasets/test64.lmdb'
+    img_path_list, keys = prepare_keys_div2k(folder_path)
+    make_lmdb_from_imgs(folder_path, lmdb_path, img_path_list, keys)
+
+    # HR images
+    folder_path = '/content/train'
+    lmdb_path = '/content/LDL/datasets/train128.lmdb'
+    img_path_list, keys = prepare_keys_div2k(folder_path)
+    make_lmdb_from_imgs(folder_path, lmdb_path, img_path_list, keys)
+    #
+    # # LRx2 images
+    folder_path = '/content/train_LR'
+    lmdb_path = '/content/LDL/datasets/train64.lmdb'
     img_path_list, keys = prepare_keys_div2k(folder_path)
     make_lmdb_from_imgs(folder_path, lmdb_path, img_path_list, keys)
     #
@@ -79,8 +92,8 @@ def prepare_keys_div2k(folder_path):
         list[str]: Key list.
     """
     print('Reading image path list ...')
-    img_path_list = sorted(list(scandir(folder_path, suffix='png', recursive=False)))
-    keys = [img_path.split('.png')[0] for img_path in sorted(img_path_list)]
+    img_path_list = sorted(list(scandir(folder_path, suffix='jpg', recursive=False)))
+    keys = [img_path.split('.jpg')[0] for img_path in sorted(img_path_list)]
 
     return img_path_list, keys
 

@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 
 from basicsr.metrics.metric_util import reorder_image, to_y_channel
+from basicsr.utils import img2tensor
 from basicsr.utils.registry import METRIC_REGISTRY
 
 
@@ -133,19 +134,24 @@ def calculate_ssim(img1, img2, crop_border, input_order='HWC', test_y_channel=Fa
 class LPIPSwrapper:
     def __init__(self, *args, **kwargs):
         device = kwargs.pop('device')
+        self.img2tensor = kwargs.pop('to_tensor', False)
         self.main = lpips.LPIPS(*args, **kwargs).to(device)
-        self.__name__ = 'calculate_lpips'
+        self.__name__ = args[0]
     def __call__(self, img1, img2, **kwargs):
         reduction = kwargs.pop('reduction', 'mean')
+        if self.img2tensor:
+            img1, img2 = img2tensor([img1, img2])
         res = self.main(img1, img2)
         if reduction == 'mean':
             res = torch.mean(res)
         elif reduction == 'sum':
             res = torch.sum(res)
-        return res.item()
+        return res
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-METRIC_REGISTRY.register(LPIPSwrapper(net='vgg', device=device))
+METRIC_REGISTRY.register(LPIPSwrapper('lpips', net='vgg', to_tensor=True, device=device))
+
+METRIC_REGISTRY.register(LPIPSwrapper('calculate_lpips', net='vgg', to_tensor=False, device=device))
 
 def _reduce(x: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
     r"""Reduce input in batch dimension if needed.

@@ -10,8 +10,8 @@ datasets:
   train:
     name: roads
     type: PairedImageDataset
-    dataroot_gt: datasets/test128.lmdb
-    dataroot_lq: datasets/test64.lmdb
+    dataroot_gt: datasets/train128.lmdb
+    dataroot_lq: datasets/train64.lmdb
     #dataroot_gt: /content/train
     #dataroot_lq: /content/train_LR
     filename_tmpl: '{}'
@@ -124,7 +124,7 @@ train:
     ssim:
       type: ssim
     lpips:
-      type: calculate_lpips
+      type: lpips
 
 # validation settings
 val:
@@ -138,6 +138,7 @@ val:
       test_y_channel: true
     lpips:
       type: calculate_lpips
+    
 
 # logging settings
 logger:
@@ -151,6 +152,7 @@ logger:
     samples_freq: 1000
     samples_train: 3
     samples_val: 3
+  use_ema: false
 
 
 # dist training settings

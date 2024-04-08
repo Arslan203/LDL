@@ -69,8 +69,9 @@ class SRModel(BaseModel):
 
         self.with_metrics = self.opt['train'].get('metrics') is not None
         if self.with_metrics:
-            self.metric_results = {metric: 0 for metric in self.opt['train']['metrics'].keys()}
-        
+            self.metric_results = {f'm_{metric}': 0 for metric in self.opt['train']['metrics'].keys()}
+            self.log_dict |= self.metric_results
+
         # set up optimizers and schedulers
         self.setup_optimizers()
         self.setup_schedulers()
@@ -222,80 +223,19 @@ class SRModel(BaseModel):
             output = self.output
             for name, opt_ in self.opt['train']['metrics'].items():
                 metric_data = dict(img1=output, img2=self.gt)
-                self.metric_results[name] = calculate_metric(metric_data, opt_)
+                self.metric_results[f'm_{name}'] = calculate_metric(metric_data, opt_)
             return self.metric_results
         return dict()
 
-    # def get_samples_visualise(self, imdict):
-    #     network = self.net_g_ema if hasattr(self, 'net_g_ema') else self.net_g
-    #     device = torch.device('cuda' if self.opt['num_gpu'] != 0 else 'cpu')
-    #     inp = torch.cat((imdict['tr_images'], imdict['tt_images']), dim=0).to(device)
-    #     masks = torch.cat((imdict['tr_masks'], imdict['tt_masks']), dim=0).to(device)
-    #     network.eval()
-    #     logits = network(inp)[0]
-    #     samples_size = imdict['tr_samples'].size(0)
-    #     fig_tr, ax_tr = plt.subplots(samples_size, 3, figsize = (15, 7))
-
-    #     for sample in range(samples_size):
-    #         image = imdict['tr_images'][sample]
-    #         mask = imdict['tr_masks'][sample].to(device)
-    #         sr = logits[sample]
-            
-    #         metrics_eval = [f'{metric_names[i]} = {round(metr(mask.unsqueeze(0), sr.unsqueeze(0)).item(), 3)}' for i, metr in enumerate(metrics)]
-    #         image = image.permute(1, 2, 0).numpy()
-            
-    #         mask = mask.cpu().permute(1, 2, 0).numpy()
-            
-    #         sr = sr.cpu().permute(1, 2, 0).numpy()
-            
-    #         fig_tr.suptitle('; '.join(metrics_eval))
-            
-    #         ax_tr[sample, 0].set_title('LR_train')
-    #         ax_tr[sample, 1].set_title('HR_train')
-    #         ax_tr[sample, 2].set_title('SR_train')
-
-    #         ax_tr[sample, 0].imshow(image)
-    #         ax_tr[sample, 1].imshow(mask)
-    #         ax_tr[sample, 2].imshow(sr)
-
-    #         ax_tr[sample, 0].set_axis_off()
-    #         ax_tr[sample, 1].set_axis_off()
-    #         ax_tr[sample, 2].set_axis_off()
-
-    #     fig_tr.tight_layout()
-
-    #     # writer.add_figure('train/samples', fig_tr, epoch)
-
-
-    #     fig_tt, ax_tt = plt.subplots(samples_size, 3, figsize = (15, 7))
-
-    #     for sample in range(samples_size):
-    #         image = imdict['tt_images'][sample]
-    #         mask = imdict['tt_masks'][sample].to(device)
-    #         sr = logits[samples_size + sample]
-            
-    #         metrics_eval = [f'{metric_names[i]} = {round(metr(mask.unsqueeze(0), sr.unsqueeze(0)).item(), 3)}' for i, metr in enumerate(metrics)]
-    #         image = image.permute(1, 2, 0).numpy()
-            
-    #         mask = mask.cpu().permute(1, 2, 0).numpy()
-            
-    #         sr = sr.cpu().permute(1, 2, 0).numpy()
-            
-    #         fig_tt.suptitle('; '.join(metrics_eval))
-            
-    #         ax_tt[sample, 0].set_title('LR_test')
-    #         ax_tt[sample, 1].set_title('HR_test')
-    #         ax_tt[sample, 2].set_title('SR_test')
-
-    #         ax_tt[sample, 0].imshow(image)
-    #         ax_tt[sample, 1].imshow(mask)
-    #         ax_tt[sample, 2].imshow(sr)
-
-    #         ax_tt[sample, 0].set_axis_off()
-    #         ax_tt[sample, 1].set_axis_off()
-    #         ax_tt[sample, 2].set_axis_off()
-
-    #     fig_tt.tight_layout()
-
-    #     # writer.add_figure('test/samples', fig_tt, epoch)
-    #     return fig_tr, fig_tt
+    def get_samples_visualise(self, imdict):
+        assert isinstance(self.opt['logger']['samples']['use_ema'], bool)
+        network = self.net_g_ema if hasattr(self, 'net_g_ema') and self.opt['logger']['samples']['use_ema'] else self.net_g
+        device = torch.device('cuda' if self.opt['num_gpu'] != 0 else 'cpu')
+        self.lq = torch.cat((imdict['tr_images'], imdict['tt_images']), dim=0).to(device)
+        masks = torch.cat((imdict['tr_masks'], imdict['tt_masks']), dim=0).to(device)
+        network.eval()
+        with torch.no_grad():
+            self.output = network(self.lq)
+        network.train()
+        del self.lq
+        return {'logits': self.output, 'masks': masks, 'metrics': self.opt['train']['metrics']}

@@ -2,8 +2,11 @@ import datetime
 import logging
 import time
 import torch
+import matplotlib.pyplot as plt
+from collections import defaultdict
 
 from .dist_util import get_dist_info, master_only
+from basicsr.metrics import calculate_metric
 
 initialized_logger = {}
 
@@ -72,87 +75,136 @@ class MessageLogger():
             # tensorboard logger
             if self.use_tb_logger and 'debug' not in self.exp_name:
                 if k.startswith('l_'):
-                    self.tb_logger.add_scalar(f'losses/{k}', v, current_iter)
+                    self.tb_logger.add_scalar(f'losses/{k[2:]}', v, current_iter)
+                elif k.startswith('m_'):
+                    self.tb_logger.add_scalar(f'metrics/{k[2:]}', v, current_iter)
                 else:
                     self.tb_logger.add_scalar(k, v, current_iter)
         self.logger.info(message)
 
 
 class SamplesLogger():
-    def __init__(self, *args, **kwargs) -> None:
-        pass
-    def __call__(self, *args, **kwds):
-        pass
-# class SamplesLogger():
-#     def __init__(self, opt, start_iter=1, tb_logger=None, **kwargs):
-#         self.exp_name = opt['name']
-#         self.interval = opt['logger']['samples']['samples_freq']
-#         self.start_iter = start_iter
-#         self.max_iters = opt['train']['total_iter']
-#         self.use_tb_logger = opt['logger']['use_tb_logger']
-#         self.tb_logger = tb_logger
+    def __init__(self, opt, start_iter=1, tb_logger=None, **kwargs):
+        self.exp_name = opt['name']
+        self.interval = opt['logger']['samples']['samples_freq']
+        self.start_iter = start_iter
+        self.max_iters = opt['train']['total_iter']
+        self.use_tb_logger = opt['logger']['use_tb_logger']
+        self.tb_logger = tb_logger
 
-#         train_loader, val_loader = kwargs.get('train_loader', None), kwargs.get('val_loader', None)
-#         train_samples = torch.randint(len(train_loader.dataset), (opt['logger']['samples']['samples_train'], ))
-#         test_samples = torch.randint(len(val_loader.dataset), (opt['logger']['samples']['samples_train'], ))
+        train_loader, val_loader = kwargs.get('train_loader', None), kwargs.get('val_loader', None)
+        train_samples = torch.randint(len(train_loader.dataset), (opt['logger']['samples']['samples_train'], ))
+        test_samples = torch.randint(len(val_loader.dataset), (opt['logger']['samples']['samples_train'], ))
         
-#         train_samples_data = [train_loader.dataset[i] for i in train_samples]
-#         test_samples_data = [val_loader.dataset[i] for i in test_samples]
+        train_samples_data = [train_loader.dataset[i] for i in train_samples]
+        test_samples_data = [val_loader.dataset[i] for i in test_samples]
 
-#         self.to_draw = {'tr_samples':train_samples, 'tt_samples':test_samples,
-#                     'tr_images': torch.stack([sample[0] for sample in train_samples_data]),
-#                     'tt_images': torch.stack([sample[0] for sample in test_samples_data]),
-#                     'tr_masks': torch.stack([sample[1] for sample in train_samples_data]),
-#                     'tt_masks': torch.stack([sample[1] for sample in test_samples_data]),
-#                 }
+        self.samples_info = {'tr_samples':train_samples, 'tt_samples':test_samples,
+                    'tr_images': torch.stack([sample[0] for sample in train_samples_data]),
+                    'tt_images': torch.stack([sample[0] for sample in test_samples_data]),
+                    'tr_masks': torch.stack([sample[1] for sample in train_samples_data]),
+                    'tt_masks': torch.stack([sample[1] for sample in test_samples_data]),
+                }
 
 
-#     @master_only
-#     def __call__(self, log_vars):
-#         """Format logging message.
+    @master_only
+    def __call__(self, log_vars):
+        """Format logging message.
 
-#         Args:
-#             log_vars (dict): It contains the following keys:
-#                 epoch (int): Epoch number.
-#                 iter (int): Current iter.
-#                 lrs (list): List for learning rates.
+        Args:
+            log_vars (dict): It contains the following keys:
+                epoch (int): Epoch number.
+                iter (int): Current iter.
+                lrs (list): List for learning rates.
 
-#                 time (float): Iter time.
-#                 data_time (float): Data time for each iter.
-#         """
-#         # epoch, iter, learning rates
-#         epoch = log_vars.pop('epoch')
-#         current_iter = log_vars.pop('iter')
-#         lrs = log_vars.pop('lrs')
+                time (float): Iter time.
+                data_time (float): Data time for each iter.
+        """
+        # epoch, iter, learning rates
+        current_iter = log_vars.pop('iter') // self.interval
 
-#         message = (f'[{self.exp_name[:5]}..][epoch:{epoch:3d}, ' f'iter:{current_iter:8,d}, lr:(')
-#         for v in lrs:
-#             message += f'{v:.3e},'
-#         message += ')] '
+        logits = log_vars.pop('logits')
+        masks = log_vars.pop('masks')
+        metrics = log_vars.pop('metrics')
 
-#         # time and estimated time
-#         if 'time' in log_vars.keys():
-#             iter_time = log_vars.pop('time')
-#             data_time = log_vars.pop('data_time')
+        samples_size = self.samples_info['tr_samples'].size(0)
+        fig_tr, ax_tr = plt.subplots(samples_size, 3, figsize = (15, 7))
 
-#             total_time = time.time() - self.start_time
-#             time_sec_avg = total_time / (current_iter - self.start_iter + 1)
-#             eta_sec = time_sec_avg * (self.max_iters - current_iter - 1)
-#             eta_str = str(datetime.timedelta(seconds=int(eta_sec)))
-#             message += f'[eta: {eta_str}, '
-#             message += f'time (data): {iter_time:.3f} ({data_time:.3f})] '
+        metrics_eval = defaultdict(float)
+        for sample in range(samples_size):
+            image = self.samples_info['tr_images'][sample]
+            mask = masks[sample]
+            sr = logits[sample]
+            
+            # metrics_eval = [f'{metric_names[i]} = {round(metr(mask.unsqueeze(0), sr.unsqueeze(0)).item(), 3)}' for name, opt_ in metrics.items()]
+            for name, opt_ in metrics.items():
+                metrics_eval[name] += calculate_metric(dict(img1=mask.unsqueeze(0), img2=sr.unsqueeze(0)), opt_).item()
+            image = image.permute(1, 2, 0).numpy()
+            
+            mask = mask.cpu().permute(1, 2, 0).numpy()
+            
+            sr = sr.cpu().permute(1, 2, 0).numpy()
+            
+            
+            
+            ax_tr[sample, 0].set_title('LR_train')
+            ax_tr[sample, 1].set_title('HR_train')
+            ax_tr[sample, 2].set_title('SR_train')
 
-#         # other items, especially losses
-#         for k, v in log_vars.items():
-#             message += f'{k}: {v:.4e} '
-#             # tensorboard logger
-#             if self.use_tb_logger and 'debug' not in self.exp_name:
-#                 if k.startswith('l_'):
-#                     self.tb_logger.add_scalar(f'losses/{k}', v, current_iter)
-#                 else:
-#                     self.tb_logger.add_scalar(k, v, current_iter)
-#         self.logger.info(message)
+            ax_tr[sample, 0].imshow(image)
+            ax_tr[sample, 1].imshow(mask)
+            ax_tr[sample, 2].imshow(sr)
 
+            ax_tr[sample, 0].set_axis_off()
+            ax_tr[sample, 1].set_axis_off()
+            ax_tr[sample, 2].set_axis_off()
+        
+        metrics_eval = [f'{name} = {round(val / samples_size, 3)}' for name, val in metrics_eval.items()]
+        fig_tr.suptitle('; '.join(metrics_eval))
+        fig_tr.tight_layout()
+
+        # writer.add_figure('train/samples', fig_tr, epoch)
+
+
+        fig_tt, ax_tt = plt.subplots(samples_size, 3, figsize = (15, 7))
+
+        for sample in range(samples_size):
+            image = self.samples_info['tt_images'][sample]
+            mask = masks[samples_size + sample]
+            sr = logits[samples_size + sample]
+            
+            for name, opt_ in metrics.items():
+                metrics_eval[name] += calculate_metric(dict(img1=mask.unsqueeze(0), img2=sr.unsqueeze(0)), opt_).item()
+            image = image.permute(1, 2, 0).numpy()
+            
+            mask = mask.cpu().permute(1, 2, 0).numpy()
+            
+            sr = sr.cpu().permute(1, 2, 0).numpy()
+            
+            fig_tt.suptitle('; '.join(metrics_eval))
+            
+            ax_tt[sample, 0].set_title('LR_test')
+            ax_tt[sample, 1].set_title('HR_test')
+            ax_tt[sample, 2].set_title('SR_test')
+
+            ax_tt[sample, 0].imshow(image)
+            ax_tt[sample, 1].imshow(mask)
+            ax_tt[sample, 2].imshow(sr)
+
+            ax_tt[sample, 0].set_axis_off()
+            ax_tt[sample, 1].set_axis_off()
+            ax_tt[sample, 2].set_axis_off()
+
+        metrics_eval = [f'{name} = {round(val / samples_size, 3)}' for name, val in metrics_eval.items()]
+        fig_tt.suptitle('; '.join(metrics_eval))
+        fig_tt.tight_layout()
+
+        # writer.add_figure('test/samples', fig_tt, epoch)
+        if self.use_tb_logger and 'debug' not in self.exp_name:
+            self.tb_logger.add_figure('train/samples', fig_tr, current_iter)
+            self.tb_logger.add_figure('val/samples', fig_tt, current_iter)
+        
+        plt.close()
 
 @master_only
 def init_tb_logger(log_dir):
