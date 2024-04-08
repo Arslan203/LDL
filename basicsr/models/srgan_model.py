@@ -3,7 +3,7 @@ from collections import OrderedDict
 
 from basicsr.archs import build_network
 from basicsr.losses import build_loss
-from basicsr.utils import get_root_logger
+from basicsr.utils import get_root_logger, tensor2img
 from basicsr.metrics import calculate_metric
 from basicsr.utils.registry import MODEL_REGISTRY
 from .sr_model import SRModel
@@ -75,6 +75,7 @@ class SRGANModel(SRModel):
         self.with_metrics = self.opt['train'].get('metrics') is not None
         if self.with_metrics:
             self.metric_results = {metric: 0 for metric in self.opt['train']['metrics'].keys()}
+            self.log_dict |= self.metric_results
 
         self.net_d_iters = train_opt.get('net_d_iters', 1)
         self.net_d_init_iters = train_opt.get('net_d_init_iters', 0)
@@ -160,12 +161,3 @@ class SRGANModel(SRModel):
             self.save_network(self.net_g, 'net_g', current_iter)
         self.save_network(self.net_d, 'net_d', current_iter)
         self.save_training_state(epoch, current_iter)
-
-    def calculate_metrics_on_iter(self):
-        if self.with_metrics:
-            # calculate metrics
-            for name, opt_ in self.opt['val']['metrics'].items():
-                metric_data = dict(img1=self.output, img2=self.gt)
-                self.metric_results[name] = calculate_metric(metric_data, opt_)
-            return self.metric_results
-        return dict()

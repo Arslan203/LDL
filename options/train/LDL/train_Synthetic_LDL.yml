@@ -116,6 +116,16 @@ train:
   net_d_init_iters: 0
   ema_decay: 0.999
 
+  metrics:
+    psnr:
+      type: psnr
+      #crop_border: 4
+      test_y_channel: true
+    ssim:
+      type: ssim
+    lpips:
+      type: calculate_lpips
+
 # validation settings
 val:
   val_freq: !!float 5e3
@@ -126,6 +136,8 @@ val:
       type: calculate_psnr
       crop_border: 4
       test_y_channel: true
+    lpips:
+      type: calculate_lpips
 
 # logging settings
 logger:

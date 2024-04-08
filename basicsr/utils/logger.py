@@ -81,7 +81,7 @@ class MessageLogger():
 class SamplesLogger():
     def __init__(self, *args, **kwargs) -> None:
         pass
-    def __call__(self, *args: logging.Any, **kwds: logging.Any) -> logging.Any:
+    def __call__(self, *args, **kwds):
         pass
 # class SamplesLogger():
 #     def __init__(self, opt, start_iter=1, tb_logger=None, **kwargs):

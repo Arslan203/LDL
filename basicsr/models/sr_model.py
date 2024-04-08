@@ -214,6 +214,17 @@ class SRModel(BaseModel):
         else:
             self.save_network(self.net_g, 'net_g', current_iter)
         self.save_training_state(epoch, current_iter)
+    
+    def calculate_metrics_on_iter(self):
+        if self.with_metrics:
+            # calculate metrics
+            # output = self.output_ema if hasattr(self, 'net_g_ema') else self.output
+            output = self.output
+            for name, opt_ in self.opt['train']['metrics'].items():
+                metric_data = dict(img1=output, img2=self.gt)
+                self.metric_results[name] = calculate_metric(metric_data, opt_)
+            return self.metric_results
+        return dict()
 
     # def get_samples_visualise(self, imdict):
     #     network = self.net_g_ema if hasattr(self, 'net_g_ema') else self.net_g

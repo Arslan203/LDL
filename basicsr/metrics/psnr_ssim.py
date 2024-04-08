@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import lpips
 import torch
+import torch.nn.functional as F
 
 from basicsr.metrics.metric_util import reorder_image, to_y_channel
 from basicsr.utils.registry import METRIC_REGISTRY
@@ -131,14 +132,189 @@ def calculate_ssim(img1, img2, crop_border, input_order='HWC', test_y_channel=Fa
 
 class LPIPSwrapper:
     def __init__(self, *args, **kwargs):
-        self.main = lpips.LPIPS(*args, **kwargs)
-    def __call__(self, x, trg, **kwargs):
+        device = kwargs.pop('device')
+        self.main = lpips.LPIPS(*args, **kwargs).to(device)
+        self.__name__ = 'calculate_lpips'
+    def __call__(self, img1, img2, **kwargs):
         reduction = kwargs.pop('reduction', 'mean')
-        res = self.main(x, trg)
+        res = self.main(img1, img2)
         if reduction == 'mean':
             res = torch.mean(res)
         elif reduction == 'sum':
             res = torch.sum(res)
         return res.item()
-    
-METRIC_REGISTRY.register()(LPIPSwrapper())
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+METRIC_REGISTRY.register(LPIPSwrapper(net='vgg', device=device))
+
+def _reduce(x: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
+    r"""Reduce input in batch dimension if needed.
+    Args:
+        x: Tensor with shape (N, *).
+        reduction: Specifies the reduction type:
+            ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``
+    """
+    if reduction == 'none':
+        return x
+    elif reduction == 'mean':
+        return x.mean(dim=0)
+    elif reduction == 'sum':
+        return x.sum(dim=0)
+    else:
+        raise ValueError("Uknown reduction. Expected one of {'none', 'mean', 'sum'}")
+
+@METRIC_REGISTRY.register()
+def psnr(img1: torch.Tensor, img2: torch.Tensor, data_range: float = 1.0,
+         reduction: str = 'mean', test_y_channel: bool = False) -> torch.Tensor:
+    r"""Compute Peak Signal-to-Noise Ratio for a batch of images.
+    Supports both greyscale and color images with RGB channel order.
+    Args:
+        x: An input tensor. Shape :math:`(N, C, H, W)`.
+        y: A target tensor. Shape :math:`(N, C, H, W)`.
+        data_range: Maximum value range of images (usually 1.0 or 255).
+        reduction: Specifies the reduction type:
+            ``'none'`` | ``'mean'`` | ``'sum'``. Default:``'mean'``
+        convert_to_greyscale: Convert RGB image to YCbCr format and computes PSNR
+            only on luminance channel if `True`. Compute on all 3 channels otherwise.
+    Returns:
+        PSNR Index of similarity betwen two images.
+    References:
+        https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
+    """
+    # _validate_input([x, y], dim_range=(4, 5), data_range=(0, data_range))
+
+    # Constant for numerical stability
+    EPS = 1e-8
+
+    x = img1 / float(data_range)
+    y = img2 / float(data_range)
+
+    if (x.size(1) == 3) and test_y_channel:
+        # Convert RGB image to YCbCr and take luminance: Y = 0.299 R + 0.587 G + 0.114 B
+        rgb_to_grey = torch.tensor([0.299, 0.587, 0.114]).view(1, -1, 1, 1).to(x)
+        x = torch.sum(x * rgb_to_grey, dim=1, keepdim=True)
+        y = torch.sum(y * rgb_to_grey, dim=1, keepdim=True)
+
+    mse = torch.mean((x - y) ** 2, dim=[1, 2, 3])
+    score: torch.Tensor = - 10 * torch.log10(mse + EPS)
+
+    return _reduce(score, reduction)
+
+def _ssim_per_channel(x: torch.Tensor, y: torch.Tensor, kernel: torch.Tensor,
+                      data_range: float = 1., k1: float = 0.01,
+                      k2: float = 0.03):
+    r"""Calculate Structural Similarity (SSIM) index for X and Y per channel.
+    Args:
+        x: An input tensor. Shape :math:`(N, C, H, W)`.
+        y: A target tensor. Shape :math:`(N, C, H, W)`.
+        kernel: 2D Gaussian kernel.
+        data_range: Maximum value range of images (usually 1.0 or 255).
+        k1: Algorithm parameter, K1 (small constant, see [1]).
+        k2: Algorithm parameter, K2 (small constant, see [1]).
+            Try a larger K2 constant (e.g. 0.4) if you get a negative or NaN results.
+    Returns:
+        Full Value of Structural Similarity (SSIM) index.
+    """
+    if x.size(-1) < kernel.size(-1) or x.size(-2) < kernel.size(-2):
+        raise ValueError(f'Kernel size can\'t be greater than actual input size. Input size: {x.size()}. '
+                         f'Kernel size: {kernel.size()}')
+
+    c1 = k1 ** 2
+    c2 = k2 ** 2
+    n_channels = x.size(1)
+    mu_x = F.conv2d(x, weight=kernel, stride=1, padding=0, groups=n_channels)
+    mu_y = F.conv2d(y, weight=kernel, stride=1, padding=0, groups=n_channels)
+
+    mu_xx = mu_x ** 2
+    mu_yy = mu_y ** 2
+    mu_xy = mu_x * mu_y
+
+    sigma_xx = F.conv2d(x ** 2, weight=kernel, stride=1, padding=0, groups=n_channels) - mu_xx
+    sigma_yy = F.conv2d(y ** 2, weight=kernel, stride=1, padding=0, groups=n_channels) - mu_yy
+    sigma_xy = F.conv2d(x * y, weight=kernel, stride=1, padding=0, groups=n_channels) - mu_xy
+
+    # Contrast sensitivity (CS) with alpha = beta = gamma = 1.
+    cs = (2. * sigma_xy + c2) / (sigma_xx + sigma_yy + c2)
+
+    # Structural similarity (SSIM)
+    ss = (2. * mu_xy + c1) / (mu_xx + mu_yy + c1) * cs
+
+    ssim_val = ss.mean(dim=(-1, -2))
+    cs = cs.mean(dim=(-1, -2))
+    return ssim_val, cs
+
+def gaussian_filter(kernel_size: int, sigma: float) -> torch.Tensor:
+    r"""Returns 2D Gaussian kernel N(0,`sigma`^2)
+    Args:
+        size: Size of the kernel
+        sigma: Std of the distribution
+    Returns:
+        gaussian_kernel: Tensor with shape (1, kernel_size, kernel_size)
+    """
+    coords = torch.arange(kernel_size).to(dtype=torch.float32)
+    coords -= (kernel_size - 1) / 2.
+
+    g = coords ** 2
+    g = (- (g.unsqueeze(0) + g.unsqueeze(1)) / (2 * sigma ** 2)).exp()
+
+    g /= g.sum()
+    return g.unsqueeze(0)
+
+@METRIC_REGISTRY.register()
+def ssim(img1: torch.Tensor, img2: torch.Tensor, kernel_size: int = 11, kernel_sigma: float = 1.5,
+         data_range: float = 1., reduction: str = 'mean', full: bool = False,
+         downsample: bool = True, k1: float = 0.01, k2: float = 0.03):
+    r"""Interface of Structural Similarity (SSIM) index.
+    Inputs supposed to be in range ``[0, data_range]``.
+    To match performance with skimage and tensorflow set ``'downsample' = True``.
+    Args:
+        x: An input tensor. Shape :math:`(N, C, H, W)` or :math:`(N, C, H, W, 2)`.
+        y: A target tensor. Shape :math:`(N, C, H, W)` or :math:`(N, C, H, W, 2)`.
+        kernel_size: The side-length of the sliding window used in comparison. Must be an odd value.
+        kernel_sigma: Sigma of normal distribution.
+        data_range: Maximum value range of images (usually 1.0 or 255).
+        reduction: Specifies the reduction type:
+            ``'none'`` | ``'mean'`` | ``'sum'``. Default:``'mean'``
+        full: Return cs map or not.
+        downsample: Perform average pool before SSIM computation. Default: True
+        k1: Algorithm parameter, K1 (small constant).
+        k2: Algorithm parameter, K2 (small constant).
+            Try a larger K2 constant (e.g. 0.4) if you get a negative or NaN results.
+    Returns:
+        Value of Structural Similarity (SSIM) index. In case of 5D input tensors, complex value is returned
+        as a tensor of size 2.
+    References:
+        Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004).
+        Image quality assessment: From error visibility to structural similarity.
+        IEEE Transactions on Image Processing, 13, 600-612.
+        https://ece.uwaterloo.ca/~z70wang/publications/ssim.pdf,
+        DOI: `10.1109/TIP.2003.819861`
+    """
+    assert kernel_size % 2 == 1, f'Kernel size must be odd, got [{kernel_size}]'
+    # _validate_input([x, y], dim_range=(4, 5), data_range=(0, data_range))
+
+    x = img1.type(torch.float32)
+    y = img2.type(torch.float32)
+
+    x = x / data_range
+    y = y / data_range
+
+    # Averagepool image if the size is large enough
+    f = max(1, round(min(x.size()[-2:]) / 256))
+    if (f > 1) and downsample:
+        x = F.avg_pool2d(x, kernel_size=f)
+        y = F.avg_pool2d(y, kernel_size=f)
+
+    kernel = gaussian_filter(kernel_size, kernel_sigma).repeat(x.size(1), 1, 1, 1).to(y)
+    _compute_ssim_per_channel = _ssim_per_channel
+    ssim_map, cs_map = _compute_ssim_per_channel(x=x, y=y, kernel=kernel, data_range=data_range, k1=k1, k2=k2)
+    ssim_val = ssim_map.mean(1)
+    cs = cs_map.mean(1)
+
+    ssim_val = _reduce(ssim_val, reduction)
+    cs = _reduce(cs, reduction)
+
+    if full:
+        return [ssim_val, cs]
+
+    return ssim_val
