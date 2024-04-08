@@ -1,4 +1,3 @@
-%%writefile /content/LDL/scripts/data_preparation/create_lmdb.py
 import argparse
 from os import path as osp
 
