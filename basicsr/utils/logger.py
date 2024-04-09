@@ -2,6 +2,7 @@ import datetime
 import logging
 import time
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
 
@@ -85,12 +86,14 @@ class MessageLogger():
 
 class SamplesLogger():
     def __init__(self, opt, start_iter=1, tb_logger=None, **kwargs):
-        self.exp_name = opt['name']
+        self.exp_name = 'samples'
         self.interval = opt['logger']['samples']['samples_freq']
         self.start_iter = start_iter
         self.max_iters = opt['train']['total_iter']
         self.use_tb_logger = opt['logger']['use_tb_logger']
         self.tb_logger = tb_logger
+        self.start_time = time.time()
+        self.logger = get_root_logger()
 
         train_loader, val_loader = kwargs.get('train_loader', None), kwargs.get('val_loader', None)
         train_samples = torch.randint(len(train_loader.dataset), (opt['logger']['samples']['samples_train'], ))
@@ -122,7 +125,22 @@ class SamplesLogger():
                 data_time (float): Data time for each iter.
         """
         # epoch, iter, learning rates
-        current_iter = log_vars.pop('iter') // self.interval
+        current_iter = log_vars.pop('iter')
+        epoch = log_vars.pop('epoch')
+
+        message = (f'[{self.exp_name[:5]}][epoch:{epoch:3d}, ' f'iter:{current_iter:8,d}]')
+
+        # time and estimated time
+        if 'time' in log_vars.keys():
+            iter_time = log_vars.pop('time')
+            data_time = log_vars.pop('data_time')
+
+            total_time = time.time() - self.start_time
+            time_sec_avg = total_time / (current_iter - self.start_iter + 1)
+            eta_sec = time_sec_avg * (self.max_iters - current_iter - 1)
+            eta_str = str(datetime.timedelta(seconds=int(eta_sec)))
+            message += f'[eta: {eta_str}, '
+            message += f'time (data): {iter_time:.3f} ({data_time:.3f})] '
 
         logits = log_vars.pop('logits')
         masks = log_vars.pop('masks')
@@ -154,7 +172,7 @@ class SamplesLogger():
 
             ax_tr[sample, 0].imshow(image)
             ax_tr[sample, 1].imshow(mask)
-            ax_tr[sample, 2].imshow(sr)
+            ax_tr[sample, 2].imshow(np.clip(sr, 0, 1))
 
             ax_tr[sample, 0].set_axis_off()
             ax_tr[sample, 1].set_axis_off()
@@ -190,7 +208,7 @@ class SamplesLogger():
 
             ax_tt[sample, 0].imshow(image)
             ax_tt[sample, 1].imshow(mask)
-            ax_tt[sample, 2].imshow(sr)
+            ax_tt[sample, 2].imshow(np.clip(sr, 0, 1))
 
             ax_tt[sample, 0].set_axis_off()
             ax_tt[sample, 1].set_axis_off()
@@ -206,6 +224,8 @@ class SamplesLogger():
             self.tb_logger.add_figure('val/samples', fig_tt, current_iter)
         
         plt.close()
+
+        self.logger.info(message)
 
 @master_only
 def init_tb_logger(log_dir):
