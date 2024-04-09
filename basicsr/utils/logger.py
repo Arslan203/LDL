@@ -129,7 +129,7 @@ class SamplesLogger():
         metrics = log_vars.pop('metrics')
 
         samples_size = self.samples_info['tr_samples'].size(0)
-        fig_tr, ax_tr = plt.subplots(samples_size, 3, figsize = (15, 7))
+        fig_tr, ax_tr = plt.subplots(samples_size, 3, figsize = (7, 7))
 
         metrics_eval = defaultdict(float)
         for sample in range(samples_size):
@@ -167,7 +167,7 @@ class SamplesLogger():
         # writer.add_figure('train/samples', fig_tr, epoch)
 
 
-        fig_tt, ax_tt = plt.subplots(samples_size, 3, figsize = (15, 7))
+        fig_tt, ax_tt = plt.subplots(samples_size, 3, figsize = (7, 7))
         metrics_eval = defaultdict(float)
 
         for sample in range(samples_size):
