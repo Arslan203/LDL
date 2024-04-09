@@ -27,7 +27,8 @@ datasets:
     num_worker_per_gpu: 2
     batch_size_per_gpu: 8
     dataset_enlarge_ratio: 100
-    prefetch_mode: ~
+    prefetch_mode: cuda
+    pin_memory: true
 
   val:
     name: roads
@@ -152,7 +153,7 @@ logger:
     samples_freq: 1000
     samples_train: 3
     samples_val: 3
-  use_ema: false
+    use_ema: false
 
 
 # dist training settings

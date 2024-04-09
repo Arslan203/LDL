@@ -149,9 +149,9 @@ class LPIPSwrapper:
         return res
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-METRIC_REGISTRY.register(LPIPSwrapper('lpips', net='vgg', to_tensor=True, device=device))
+METRIC_REGISTRY.register(LPIPSwrapper('lpips', net='vgg', to_tensor=False, device=device))
 
-METRIC_REGISTRY.register(LPIPSwrapper('calculate_lpips', net='vgg', to_tensor=False, device=device))
+METRIC_REGISTRY.register(LPIPSwrapper('calculate_lpips', net='vgg', to_tensor=True, device=device))
 
 def _reduce(x: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
     r"""Reduce input in batch dimension if needed.

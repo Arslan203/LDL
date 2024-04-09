@@ -99,11 +99,12 @@ class SamplesLogger():
         train_samples_data = [train_loader.dataset[i] for i in train_samples]
         test_samples_data = [val_loader.dataset[i] for i in test_samples]
 
+
         self.samples_info = {'tr_samples':train_samples, 'tt_samples':test_samples,
-                    'tr_images': torch.stack([sample[0] for sample in train_samples_data]),
-                    'tt_images': torch.stack([sample[0] for sample in test_samples_data]),
-                    'tr_masks': torch.stack([sample[1] for sample in train_samples_data]),
-                    'tt_masks': torch.stack([sample[1] for sample in test_samples_data]),
+                    'tr_images': torch.stack([sample['lq'] for sample in train_samples_data]),
+                    'tt_images': torch.stack([sample['lq'] for sample in test_samples_data]),
+                    'tr_masks': torch.stack([sample['gt'] for sample in train_samples_data]),
+                    'tt_masks': torch.stack([sample['gt'] for sample in test_samples_data]),
                 }
 
 
@@ -167,6 +168,7 @@ class SamplesLogger():
 
 
         fig_tt, ax_tt = plt.subplots(samples_size, 3, figsize = (15, 7))
+        metrics_eval = defaultdict(float)
 
         for sample in range(samples_size):
             image = self.samples_info['tt_images'][sample]
@@ -181,7 +183,6 @@ class SamplesLogger():
             
             sr = sr.cpu().permute(1, 2, 0).numpy()
             
-            fig_tt.suptitle('; '.join(metrics_eval))
             
             ax_tt[sample, 0].set_title('LR_test')
             ax_tt[sample, 1].set_title('HR_test')
