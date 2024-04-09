@@ -174,7 +174,7 @@ def _reduce(x: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
         raise ValueError("Uknown reduction. Expected one of {'none', 'mean', 'sum'}")
 
 @METRIC_REGISTRY.register()
-def psnr(img1: torch.Tensor, img2: torch.Tensor, data_range: float = 1.0,
+def psnr(img1: torch.Tensor, img2: torch.Tensor, crop_border: int = 5, data_range: float = 1.0,
          reduction: str = 'mean', test_y_channel: bool = False) -> torch.Tensor:
     r"""Compute Peak Signal-to-Noise Ratio for a batch of images.
     Supports both greyscale and color images with RGB channel order.
@@ -198,6 +198,10 @@ def psnr(img1: torch.Tensor, img2: torch.Tensor, data_range: float = 1.0,
 
     x = img1 / float(data_range)
     y = img2 / float(data_range)
+
+    if crop_border != 0:
+        x = x[..., crop_border:-crop_border, crop_border:-crop_border]
+        y = y[..., crop_border:-crop_border, crop_border:-crop_border]
 
     if (x.size(1) == 3) and test_y_channel:
         # Convert RGB image to YCbCr and take luminance: Y = 0.299 R + 0.587 G + 0.114 B
@@ -271,7 +275,7 @@ def gaussian_filter(kernel_size: int, sigma: float) -> torch.Tensor:
     return g.unsqueeze(0)
 
 @METRIC_REGISTRY.register()
-def ssim(img1: torch.Tensor, img2: torch.Tensor, kernel_size: int = 11, kernel_sigma: float = 1.5,
+def ssim(img1: torch.Tensor, img2: torch.Tensor, crop_border: int = 5, kernel_size: int = 11, kernel_sigma: float = 1.5,
          data_range: float = 1., reduction: str = 'mean', full: bool = False,
          downsample: bool = True, k1: float = 0.01, k2: float = 0.03):
     r"""Interface of Structural Similarity (SSIM) index.
@@ -308,6 +312,10 @@ def ssim(img1: torch.Tensor, img2: torch.Tensor, kernel_size: int = 11, kernel_s
 
     x = x / data_range
     y = y / data_range
+
+    if crop_border > 0:
+        x = x[..., crop_border:-crop_border, crop_border:-crop_border]
+        y = y[..., crop_border:-crop_border, crop_border:-crop_border]
 
     # Averagepool image if the size is large enough
     f = max(1, round(min(x.size()[-2:]) / 256))
