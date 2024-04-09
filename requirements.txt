@@ -19,3 +19,4 @@ thop
 ptflops
 wandb
 matplotlib
+wandb-osh

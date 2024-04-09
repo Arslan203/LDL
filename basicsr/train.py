@@ -4,7 +4,7 @@ import math
 import time
 import torch
 from os import path as osp
-
+from wandb-osh.hooks import TriggerWandbSyncHook
 from basicsr.data import build_dataloader, build_dataset
 from basicsr.data.data_sampler import EnlargedSampler
 from basicsr.data.prefetch_dataloader import CPUPrefetcher, CUDAPrefetcher
@@ -113,6 +113,12 @@ def train_pipeline(root_path):
     # initialize wandb and tb loggers
     tb_logger = init_tb_loggers(opt)
 
+    if (opt['logger'].get('wandb') is not None) and (opt['logger']['wandb'].get('project')
+                                                     is not None) and ('debug' not in opt['name']):
+        wandb.flush() # clear local logs
+    
+    sync_trigger = TriggerWandbSyncHook()
+
     # create train and validation dataloaders
     result = create_train_val_dataloader(opt, logger)
     train_loader, train_sampler, val_loader, total_epochs, total_iters = result
@@ -185,14 +191,15 @@ def train_pipeline(root_path):
                 log_vars.update(model.get_samples_visualise(samples_logger.samples_info))
                 samples_logger(log_vars)
 
-            # save models and training states
-            if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
-                logger.info('Saving models and training states.')
-                model.save(epoch, current_iter)
-
             # validation
             if opt.get('val') is not None and (current_iter % opt['val']['val_freq'] == 0):
                 model.validation(val_loader, current_iter, tb_logger, opt['val']['save_img'])
+            
+            # save models and training states
+            if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
+                logger.info('Saving models and training states.')
+                sync_trigger()
+                model.save(epoch, current_iter)
 
             data_time = time.time()
             iter_time = time.time()
