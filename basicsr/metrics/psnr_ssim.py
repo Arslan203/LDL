@@ -133,19 +133,23 @@ def calculate_ssim(img1, img2, crop_border, input_order='HWC', test_y_channel=Fa
 
 class LPIPSwrapper:
     def __init__(self, *args, **kwargs):
-        device = kwargs.pop('device')
+        self.device = kwargs.pop('device')
         self.img2tensor = kwargs.pop('to_tensor', False)
-        self.main = lpips.LPIPS(*args, **kwargs).to(device)
+        self.main = lpips.LPIPS(*args, **kwargs).to(self.device)
         self.__name__ = args[0]
     def __call__(self, img1, img2, **kwargs):
         reduction = kwargs.pop('reduction', 'mean')
         if self.img2tensor:
-            img1, img2 = img2tensor([img1, img2])
+            tmp = img2tensor([img1, img2])
+            img1, img2 = tmp[0].to(device), tmp[1].to(device)
         res = self.main(img1, img2)
         if reduction == 'mean':
             res = torch.mean(res)
         elif reduction == 'sum':
             res = torch.sum(res)
+          
+        if self.img2tensor:
+          res = res.item()
         return res
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'

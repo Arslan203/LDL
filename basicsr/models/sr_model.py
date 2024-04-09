@@ -144,7 +144,7 @@ class SRModel(BaseModel):
         dataset_name = dataloader.dataset.opt['name']
         with_metrics = self.opt['val'].get('metrics') is not None
         if with_metrics:
-            self.metric_results = {metric: 0 for metric in self.opt['val']['metrics'].keys()}
+            self.metric_results_val = {metric: 0 for metric in self.opt['val']['metrics'].keys()}
         pbar = tqdm(total=len(dataloader), unit='image')
 
         for idx, val_data in enumerate(dataloader):
@@ -180,26 +180,26 @@ class SRModel(BaseModel):
                 # calculate metrics
                 for name, opt_ in self.opt['val']['metrics'].items():
                     metric_data = dict(img1=sr_img, img2=gt_img)
-                    self.metric_results[name] += calculate_metric(metric_data, opt_)
+                    self.metric_results_val[name] += calculate_metric(metric_data, opt_)
             pbar.update(1)
             pbar.set_description(f'Test {img_name}')
         pbar.close()
 
         if with_metrics:
-            for metric in self.metric_results.keys():
-                self.metric_results[metric] /= (idx + 1)
+            for metric in self.metric_results_val.keys():
+                self.metric_results_val[metric] /= (idx + 1)
 
             self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
 
     def _log_validation_metric_values(self, current_iter, dataset_name, tb_logger):
         log_str = f'Validation {dataset_name}\n'
-        for metric, value in self.metric_results.items():
+        for metric, value in self.metric_results_val.items():
             log_str += f'\t # {metric}: {value:.4f}\n'
         logger = get_root_logger()
         logger.info(log_str)
         if tb_logger:
-            for metric, value in self.metric_results.items():
-                tb_logger.add_scalar(f'metrics/{metric}', value, current_iter)
+            for metric, value in self.metric_results_val.items():
+                tb_logger.add_scalar(f'val/metrics/{metric}', value, current_iter)
 
     def get_current_visuals(self):
         out_dict = OrderedDict()
