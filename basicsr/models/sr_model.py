@@ -67,9 +67,9 @@ class SRModel(BaseModel):
         if self.cri_pix is None and self.cri_perceptual is None:
             raise ValueError('Both pixel and perceptual losses are None.')
 
-        self.with_metrics = self.opt['train'].get('metrics') is not None
+        self.with_metrics = self.opt.get('metrics') is not None
         if self.with_metrics:
-            self.metric_results = {f'm_{metric}': 0 for metric in self.opt['train']['metrics'].keys()}
+            self.metric_results = {f'm_{metric}': 0 for metric in self.opt['metrics'].keys()}
             self.log_dict |= self.metric_results
 
         # set up optimizers and schedulers
@@ -126,7 +126,7 @@ class SRModel(BaseModel):
             self.model_ema(decay=self.ema_decay)
 
     def test(self):
-        if hasattr(self, 'net_g_ema'):
+        if hasattr(self, 'net_g_ema') and self.opt.get('use_ema', False):
             self.net_g_ema.eval()
             with torch.no_grad():
                 self.output = self.net_g_ema(self.lq)
@@ -142,15 +142,21 @@ class SRModel(BaseModel):
 
     def nondist_validation(self, dataloader, current_iter, tb_logger, save_img):
         dataset_name = dataloader.dataset.opt['name']
-        with_metrics = self.opt['val'].get('metrics') is not None
+        with_metrics = self.opt.get('metrics') is not None
         if with_metrics:
-            self.metric_results_val = {metric: 0 for metric in self.opt['val']['metrics'].keys()}
+            self.metric_results_val = {metric: 0 for metric in self.opt['metrics'].keys()}
         pbar = tqdm(total=len(dataloader), unit='image')
 
         for idx, val_data in enumerate(dataloader):
             img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
             self.feed_data(val_data)
             self.test()
+
+            if with_metrics:
+                # calculate metrics
+                for name, opt_ in self.opt['metrics'].items():
+                    metric_data = dict(img1=self.output, img2=self.gt)
+                    self.metric_results_val[name] += calculate_metric(metric_data, opt_).items()
 
             visuals = self.get_current_visuals()
             sr_img = tensor2img([visuals['result']])
@@ -176,11 +182,7 @@ class SRModel(BaseModel):
                                                  f'{img_name}_{self.opt["name"]}.png')
                 imwrite(sr_img, save_img_path)
 
-            if with_metrics:
-                # calculate metrics
-                for name, opt_ in self.opt['val']['metrics'].items():
-                    metric_data = dict(img1=sr_img, img2=gt_img)
-                    self.metric_results_val[name] += calculate_metric(metric_data, opt_)
+            
             pbar.update(1)
             pbar.set_description(f'Test {img_name}')
         pbar.close()
@@ -221,7 +223,7 @@ class SRModel(BaseModel):
             # calculate metrics
             # output = self.output_ema if hasattr(self, 'net_g_ema') else self.output
             output = self.output
-            for name, opt_ in self.opt['train']['metrics'].items():
+            for name, opt_ in self.opt['metrics'].items():
                 metric_data = dict(img1=output, img2=self.gt)
                 self.metric_results[f'm_{name}'] = calculate_metric(metric_data, opt_)
             return self.metric_results
@@ -229,7 +231,7 @@ class SRModel(BaseModel):
 
     def get_samples_visualise(self, imdict):
         assert isinstance(self.opt['logger']['samples']['use_ema'], bool)
-        network = self.net_g_ema if hasattr(self, 'net_g_ema') and self.opt['logger']['samples']['use_ema'] else self.net_g
+        network = self.net_g_ema if hasattr(self, 'net_g_ema') and self.opt['use_ema'] else self.net_g
         device = torch.device('cuda' if self.opt['num_gpu'] != 0 else 'cpu')
         self.lq = torch.cat((imdict['tr_images'], imdict['tt_images']), dim=0).to(device)
         masks = torch.cat((imdict['tr_masks'], imdict['tt_masks']), dim=0).to(device)
@@ -238,4 +240,4 @@ class SRModel(BaseModel):
             self.output = network(self.lq)
         network.train()
         del self.lq
-        return {'logits': self.output, 'masks': masks, 'metrics': self.opt['train']['metrics']}
+        return {'logits': self.output, 'masks': masks, 'metrics': self.opt['metrics']}

@@ -117,28 +117,20 @@ train:
   net_d_init_iters: 0
   ema_decay: 0.999
 
-  metrics:
-    psnr:
-      type: psnr
-      #crop_border: 4
-      test_y_channel: true
-    ssim:
-      type: ssim
-    lpips:
-      type: lpips
+metrics:
+  psnr:
+    type: psnr
+    #crop_border: 4
+    test_y_channel: true
+  ssim:
+    type: ssim
+  lpips:
+    type: lpips
 
 # validation settings
 val:
   val_freq: !!float 5e3
   save_img: false
-
-  metrics:
-    psnr:
-      type: calculate_psnr
-      crop_border: 4
-      test_y_channel: true
-    lpips:
-      type: calculate_lpips
     
 
 # logging settings
@@ -153,7 +145,8 @@ logger:
     samples_freq: 1000
     samples_train: 3
     samples_val: 3
-    use_ema: false
+
+use_ema: false
 
 
 # dist training settings

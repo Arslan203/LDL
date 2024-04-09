@@ -1,5 +1,5 @@
 # LDL
-
+# TODO: fix auto-resume, add FID, fix train_samples tfs
 ### [Paper](https://liangjie.xyz/LjHomepageFiles/paper_files/LDL_CVPR2022_paper.pdf) |   [Supplementary Material](https://liangjie.xyz/LjHomepageFiles/paper_files/LDL_CVPR2022_suppl.pdf)
 
 > **Details or Artifacts: A Locally Discriminative Learning Approach to Realistic Image Super-Resolution** <br>

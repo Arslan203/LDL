@@ -72,9 +72,9 @@ class SRGANModel(SRModel):
             self.log_dict['l_d_fake'] = 0
             self.log_dict['out_d_fake'] = 0
         
-        self.with_metrics = self.opt['train'].get('metrics') is not None
+        self.with_metrics = self.opt.get('metrics') is not None
         if self.with_metrics:
-            self.metric_results = {f'm_{metric}': 0 for metric in self.opt['train']['metrics'].keys()}
+            self.metric_results = {f'm_{metric}': 0 for metric in self.opt['metrics'].keys()}
             self.log_dict |= self.metric_results
 
         self.net_d_iters = train_opt.get('net_d_iters', 1)
