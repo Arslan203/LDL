@@ -9,89 +9,8 @@ from .sr_model import SRModel
 from basicsr.losses.LDL_loss import get_refined_artifact_map
 
 @MODEL_REGISTRY.register()
-class SRGANArtifactsDisModel(SRModel):
+class SRGANArtifactsDisModel(SRGANModel):
     """SRGAN model for single image super-resolution."""
-
-    def init_training_settings(self):
-        train_opt = self.opt['train']
-
-        self.ema_decay = train_opt.get('ema_decay', 0)
-        if self.ema_decay > 0:
-            logger = get_root_logger()
-            logger.info(f'Use Exponential Moving Average with decay: {self.ema_decay}')
-            self.net_g_ema = build_network(self.opt['network_g']).to(self.device)
-            for p in self.net_g_ema.parameters():
-                p.requires_grad = False
-            # load pretrained model
-            load_path = self.opt['path'].get('pretrain_network_g', None)
-            if load_path is not None:
-                self.load_network(self.net_g_ema, load_path, self.opt['path'].get('strict_load_g', True), 'params_ema')
-            else:
-                self.model_ema(0)  # copy net_g weight
-            self.net_g_ema.eval()
-
-        # define network net_d
-        self.net_d = build_network(self.opt['network_d'])
-        self.net_d = self.model_to_device(self.net_d)
-        # self.print_network(self.net_d)
-
-        # load pretrained models
-        load_path = self.opt['path'].get('pretrain_network_d', None)
-        load_key = self.opt['path'].get('param_key_g', None)
-        if load_path is not None:
-            self.load_network(self.net_d, load_path, self.opt['path'].get('strict_load_d', True), load_key)
-
-        self.net_g.train()
-        self.net_d.train()
-
-        self.log_dict = OrderedDict()
-
-        # define losses
-        if train_opt.get('pixel_opt'):
-            self.cri_pix = build_loss(train_opt['pixel_opt']).to(self.device)
-            self.log_dict['l_g_pix'] = 0
-        else:
-            self.cri_pix = None
-
-        if train_opt.get('artifacts_opt'):
-            self.cri_artifacts = build_loss(train_opt['artifacts_opt']).to(self.device)
-            self.log_dict['l_g_artifacts'] = 0
-        else:
-            self.cri_artifacts = None
-
-        if train_opt.get('perceptual_opt'):
-            self.cri_perceptual = build_loss(train_opt['perceptual_opt']).to(self.device)
-            self.log_dict['l_g_percep'] = 0
-            if self.cri_perceptual.style_weight > 0:
-                self.log_dict['l_g_style'] = 0
-        else:
-            self.cri_perceptual = None
-
-        if train_opt.get('gan_opt'):
-            self.cri_gan = build_loss(train_opt['gan_opt']).to(self.device)
-            self.log_dict['l_g_gan'] = 0
-            self.log_dict['l_d_real'] = 0
-            self.log_dict['out_d_real'] = 0
-            self.log_dict['l_d_fake'] = 0
-            self.log_dict['out_d_fake'] = 0
-
-        self.net_d_iters = train_opt.get('net_d_iters', 1)
-        self.net_d_init_iters = train_opt.get('net_d_init_iters', 0)
-
-        # set up optimizers and schedulers
-        self.setup_optimizers()
-        self.setup_schedulers()
-
-    def setup_optimizers(self):
-        train_opt = self.opt['train']
-        # optimizer g
-        optim_type = train_opt['optim_g'].pop('type')
-        self.optimizer_g = self.get_optimizer(optim_type, self.net_g.parameters(), **train_opt['optim_g'])
-        self.optimizers.append(self.optimizer_g)
-        # optimizer d
-        optim_type = train_opt['optim_d'].pop('type')
-        self.optimizer_d = self.get_optimizer(optim_type, self.net_d.parameters(), **train_opt['optim_d'])
-        self.optimizers.append(self.optimizer_d)
 
     def optimize_parameters(self, current_iter):
         # optimize net_g
@@ -154,6 +73,7 @@ class SRGANArtifactsDisModel(SRModel):
         l_d_fake.backward()
         self.optimizer_d.step()
 
+        loss_dict |= self.calculate_metrics_on_iter()
         self.reduce_loss_dict(loss_dict)
 
         if self.ema_decay > 0:
