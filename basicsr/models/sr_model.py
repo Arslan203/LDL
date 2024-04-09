@@ -156,31 +156,32 @@ class SRModel(BaseModel):
                 # calculate metrics
                 for name, opt_ in self.opt['metrics'].items():
                     metric_data = dict(img1=self.output, img2=self.gt)
-                    self.metric_results_val[name] += calculate_metric(metric_data, opt_).items()
-
-            visuals = self.get_current_visuals()
-            sr_img = tensor2img([visuals['result']])
-            if 'gt' in visuals:
-                gt_img = tensor2img([visuals['gt']])
-                del self.gt
-
-            # tentative for out of GPU memory
-            del self.lq
-            del self.output
-            torch.cuda.empty_cache()
+                    self.metric_results_val[name] += calculate_metric(metric_data, opt_).item()
 
             if save_img:
-                if self.opt['is_train']:
-                    save_img_path = osp.join(self.opt['path']['visualization'], str(current_iter),
-                                             f'{img_name}_{current_iter}.png')
-                else:
-                    if self.opt['val']['suffix']:
-                        save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
-                                                 f'{img_name}_{self.opt["val"]["suffix"]}.png')
+                visuals = self.get_current_visuals()
+                sr_img = tensor2img([visuals['result']])
+                if 'gt' in visuals:
+                    gt_img = tensor2img([visuals['gt']])
+                    del self.gt
+
+                # tentative for out of GPU memory
+                del self.lq
+                del self.output
+                torch.cuda.empty_cache()
+
+                if save_img:
+                    if self.opt['is_train']:
+                        save_img_path = osp.join(self.opt['path']['visualization'], str(current_iter),
+                                                f'{img_name}_{current_iter}.png')
                     else:
-                        save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
-                                                 f'{img_name}_{self.opt["name"]}.png')
-                imwrite(sr_img, save_img_path)
+                        if self.opt['val']['suffix']:
+                            save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
+                                                    f'{img_name}_{self.opt["val"]["suffix"]}.png')
+                        else:
+                            save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
+                                                    f'{img_name}_{self.opt["name"]}.png')
+                    imwrite(sr_img, save_img_path)
 
             
             pbar.update(1)
@@ -230,7 +231,6 @@ class SRModel(BaseModel):
         return dict()
 
     def get_samples_visualise(self, imdict):
-        assert isinstance(self.opt['logger']['samples']['use_ema'], bool)
         network = self.net_g_ema if hasattr(self, 'net_g_ema') and self.opt['use_ema'] else self.net_g
         device = torch.device('cuda' if self.opt['num_gpu'] != 0 else 'cpu')
         self.lq = torch.cat((imdict['tr_images'], imdict['tt_images']), dim=0).to(device)
