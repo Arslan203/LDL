@@ -4,7 +4,7 @@ import math
 import time
 import torch
 from os import path as osp
-from wandb-osh.hooks import TriggerWandbSyncHook
+from wandb_osh.hooks import TriggerWandbSyncHook
 from basicsr.data import build_dataloader, build_dataset
 from basicsr.data.data_sampler import EnlargedSampler
 from basicsr.data.prefetch_dataloader import CPUPrefetcher, CUDAPrefetcher
@@ -113,9 +113,9 @@ def train_pipeline(root_path):
     # initialize wandb and tb loggers
     tb_logger = init_tb_loggers(opt)
 
-    if (opt['logger'].get('wandb') is not None) and (opt['logger']['wandb'].get('project')
-                                                     is not None) and ('debug' not in opt['name']):
-        wandb.flush() # clear local logs
+    # if (opt['logger'].get('wandb') is not None) and (opt['logger']['wandb'].get('project')
+    #                                                  is not None) and ('debug' not in opt['name']):
+    #     wandb.flush() # clear local logs
     
     sync_trigger = TriggerWandbSyncHook()
 
