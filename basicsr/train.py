@@ -185,7 +185,7 @@ def train_pipeline(root_path):
 
             # log samples
             if current_iter % opt['logger']['samples']['samples_freq'] == 0:
-                log_vars = {'iter': current_iter}
+                log_vars = {'epoch': epoch, 'iter': current_iter}
                 log_vars.update({'lrs': model.get_current_learning_rate()})
                 log_vars.update({'time': iter_time, 'data_time': data_time})
                 log_vars.update(model.get_samples_visualise(samples_logger.samples_info))

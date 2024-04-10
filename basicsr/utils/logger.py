@@ -126,6 +126,7 @@ class SamplesLogger():
         """
         # epoch, iter, learning rates
         current_iter = log_vars.pop('iter')
+        epoch = log_vars.pop('epoch')
 
         message = (f'[{self.exp_name[:5]}][epoch:{epoch:3d}, ' f'iter:{current_iter:8,d}]')
 
@@ -219,8 +220,8 @@ class SamplesLogger():
 
         # writer.add_figure('test/samples', fig_tt, epoch)
         if self.use_tb_logger and 'debug' not in self.exp_name:
-            self.tb_logger.add_figure('train/samples', fig_tr, current_iter)
-            self.tb_logger.add_figure('val/samples', fig_tt, current_iter)
+            self.tb_logger.add_figure('train/samples', fig_tr, current_iter // self.interval)
+            self.tb_logger.add_figure('val/samples', fig_tt, current_iter // self.interval)
         
         plt.close()
 
