@@ -126,7 +126,6 @@ class SamplesLogger():
         """
         # epoch, iter, learning rates
         current_iter = log_vars.pop('iter')
-        epoch = log_vars.pop('epoch')
 
         message = (f'[{self.exp_name[:5]}][epoch:{epoch:3d}, ' f'iter:{current_iter:8,d}]')
 
