@@ -117,7 +117,7 @@ def train_pipeline(root_path):
     #                                                  is not None) and ('debug' not in opt['name']):
     #     wandb.flush() # clear local logs
     
-    sync_trigger = TriggerWandbSyncHook()
+    # sync_trigger = TriggerWandbSyncHook()
 
     # create train and validation dataloaders
     result = create_train_val_dataloader(opt, logger)
@@ -198,7 +198,7 @@ def train_pipeline(root_path):
             # save models and training states
             if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
                 logger.info('Saving models and training states.')
-                sync_trigger()
+                # sync_trigger()
                 model.save(epoch, current_iter)
 
             data_time = time.time()
