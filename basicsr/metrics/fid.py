@@ -108,4 +108,4 @@ class FID:
         return calculate_fid(*args, eps=eps)
 
 
-@METRIC_REGISTRY.register(FID())
+METRIC_REGISTRY.register(FID())

@@ -143,14 +143,19 @@ class SRModel(BaseModel):
     def nondist_validation(self, dataloader, current_iter, tb_logger, save_img):
         dataset_name = dataloader.dataset.opt['name']
         with_metrics = self.opt.get('metrics') is not None
+        eval_FID = self.opt.get('FID') is not None
         if with_metrics:
             self.metric_results_val = {metric: 0 for metric in self.opt['metrics'].keys()}
         pbar = tqdm(total=len(dataloader), unit='image')
-
+        if eval_FID:
+            FID_dataloader = []
         for idx, val_data in enumerate(dataloader):
             img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
             self.feed_data(val_data)
             self.test()
+
+            if eval_FID:
+                FID_dataloader.append((self.output.clone().cpu(), val_data['gt']))
 
             if with_metrics:
                 # calculate metrics
@@ -193,7 +198,7 @@ class SRModel(BaseModel):
                 self.metric_results_val[metric] /= (idx + 1)
             
             if self.opt.get('FID') is not None:
-                metric_data = dict(data_generator = dataloader)
+                metric_data = dict(data_generator = FID_dataloader)
                 self.metric_results_val['FID'] = calculate_metric(metric_data, self.opt['FID']).item()
 
             self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
