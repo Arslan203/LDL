@@ -24,7 +24,7 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 1
+    num_worker_per_gpu: 2
     batch_size_per_gpu: 16
     dataset_enlarge_ratio: 100
     prefetch_mode: cuda
@@ -132,20 +132,20 @@ FID:
 
 # validation settings
 val:
-  val_freq: !!float 5e3
+  val_freq: !!float 1e4
   save_img: false
     
 
 # logging settings
 logger:
-  print_freq: 100
-  save_checkpoint_freq: !!float 5e3
+  print_freq: 1000
+  save_checkpoint_freq: !!float 1e4
   use_tb_logger: true
   wandb:
     project: lDL_SR
     resume_id: ~
   samples:
-    samples_freq: 1000
+    samples_freq: 2000
     samples_train: 3
     samples_val: 3
 
