@@ -5,6 +5,7 @@ from scipy import linalg
 from tqdm import tqdm
 
 from basicsr.archs.inception import InceptionV3
+from basicsr.utils.registry import METRIC_REGISTRY
 
 
 def load_patched_inception_v3(device='cuda', resize_input=True, normalize_input=False):
@@ -33,18 +34,24 @@ def extract_inception_features(data_generator, inception, len_generator=None, de
         pbar = tqdm(total=len_generator, unit='batch', desc='Extract')
     else:
         pbar = None
-    features = []
+    features_obj, features_trg = [], []
 
-    for data in data_generator:
+    for data, trg in data_generator:
         if pbar:
             pbar.update(1)
-        data = data.to(device)
+        batch_size = data.shape[0]
+        data, trg = data.to(device), trg.to(device)
+        data = torch.cat((data, trg), dim=0)
         feature = inception(data)[0].view(data.shape[0], -1)
-        features.append(feature.to('cpu'))
+        features_obj.append(feature[:batch_size].to('cpu'))
+        features_trg.append(feature[batch_size:].to('cpu'))
+        # data = data.to(device)
+        # feature = inception(data)[0].view(data.shape[0], -1)
+        # features.append(feature.to('cpu'))
     if pbar:
         pbar.close()
-    features = torch.cat(features, 0)
-    return features
+    features = torch.cat(features_obj, 0).numpy(), torch.cat(features_trg, 0).numpy()
+    return np.mean(features[0], axis=0), np.cov(features[0], rowvar=False), np.mean(features[1], axis=0), np.cov(features[1], rowvar=False)
 
 
 def calculate_fid(mu1, sigma1, mu2, sigma2, eps=1e-6):
@@ -91,3 +98,14 @@ def calculate_fid(mu1, sigma1, mu2, sigma2, eps=1e-6):
     fid = mean_norm + trace
 
     return fid
+
+class FID:
+    def __init__(self, name='FID'):
+        self.inception = load_patched_inception_v3()
+        self.__name__ = name
+    def __call__(self, data_generator, len_generator=None, eps=1e-6):
+        args = extract_inception_features(data_generator, self.inception, len_generator=len_generator)
+        return calculate_fid(*args, eps=eps)
+
+
+@METRIC_REGISTRY.register(FID())

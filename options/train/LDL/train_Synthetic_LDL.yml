@@ -24,8 +24,8 @@ datasets:
 
     # data loader
     use_shuffle: true
-    num_worker_per_gpu: 2
-    batch_size_per_gpu: 8
+    num_worker_per_gpu: 1
+    batch_size_per_gpu: 16
     dataset_enlarge_ratio: 100
     prefetch_mode: cuda
     pin_memory: true
@@ -126,6 +126,9 @@ metrics:
     type: ssim
   lpips:
     type: lpips
+    
+FID:
+  type: FID
 
 # validation settings
 val:

@@ -191,6 +191,10 @@ class SRModel(BaseModel):
         if with_metrics:
             for metric in self.metric_results_val.keys():
                 self.metric_results_val[metric] /= (idx + 1)
+            
+            if self.opt.get('FID') is not None:
+                metric_data = dict(data_generator = dataloader)
+                self.metric_results_val['FID'] = calculate_metric(metric_data, self.opt['FID']).item()
 
             self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
 
