@@ -56,7 +56,7 @@ network_d:
 
 # path
 path:
-  pretrain_network_g: #experiments/pretrained_models/ESRGAN/ESRGAN_PSNR_SRx4_DF2K_official-150ff491.pth
+  pretrain_network_g: experiments/pretrained_models/net_g_DF2K_RRDB+LDL_x2.pth
   param_key_g: params_ema
   strict_load_g: true
   resume_state: ~
