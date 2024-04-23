@@ -4,6 +4,7 @@ from os import path as osp
 from tqdm import tqdm
 from thop import profile
 import time
+import json
 from ptflops import get_model_complexity_info
 
 from basicsr.archs import build_network
@@ -145,10 +146,13 @@ class SRModel(BaseModel):
         with_metrics = self.opt.get('metrics') is not None
         eval_FID = self.opt.get('FID') is not None
         if with_metrics:
+            self.metric_results_val_images = {metric: dict() for metric in self.opt['metrics'].keys()}
             self.metric_results_val = {metric: 0 for metric in self.opt['metrics'].keys()}
         pbar = tqdm(total=len(dataloader), unit='image')
         if eval_FID:
             FID_dataloader = []
+        
+        save_path = osp.join(self.opt['path']['visualization'], str(current_iter)) if self.opt['is_train'] else osp.join(self.opt['path']['visualization'], dataset_name)
         for idx, val_data in enumerate(dataloader):
             img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
             self.feed_data(val_data)
@@ -161,7 +165,7 @@ class SRModel(BaseModel):
                 # calculate metrics
                 for name, opt_ in self.opt['metrics'].items():
                     metric_data = dict(img1=self.output, img2=self.gt)
-                    self.metric_results_val[name] += calculate_metric(metric_data, opt_).item()
+                    self.metric_results_val_images[name][f'{img_name}.png'] = calculate_metric(metric_data, opt_).item()
 
             if save_img:
                 visuals = self.get_current_visuals()
@@ -176,16 +180,15 @@ class SRModel(BaseModel):
                 torch.cuda.empty_cache()
 
                 if save_img:
-                    if self.opt['is_train']:
-                        save_img_path = osp.join(self.opt['path']['visualization'], str(current_iter),
-                                                f'{img_name}_{current_iter}.png')
-                    else:
-                        if self.opt['val']['suffix']:
-                            save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
-                                                    f'{img_name}_{self.opt["val"]["suffix"]}.png')
-                        else:
-                            save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
-                                                    f'{img_name}_{self.opt["name"]}.png')
+                    # if self.opt['is_train']:
+                    save_img_path = osp.join(save_path, f'{img_name}.png')
+                    # else:
+                        # if self.opt['val']['suffix']:
+                        #     save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
+                        #                             f'{img_name}_{self.opt["val"]["suffix"]}.png')
+                        # else:
+                        # save_img_path = osp.join(self.opt['path']['visualization'], dataset_name,
+                        #                         f'{img_name}.png')
                     imwrite(sr_img, save_img_path)
 
             
@@ -195,13 +198,19 @@ class SRModel(BaseModel):
 
         if with_metrics:
             for metric in self.metric_results_val.keys():
-                self.metric_results_val[metric] /= (idx + 1)
+                self.metric_results_val[metric] = sum(self.metric_results_val_images[metric].values()) / (idx + 1)
             
-            if self.opt.get('FID') is not None:
-                metric_data = dict(data_generator = FID_dataloader)
-                self.metric_results_val['FID'] = calculate_metric(metric_data, self.opt['FID']).item()
+        if self.opt.get('FID') is not None:
+            metric_data = dict(data_generator = FID_dataloader)
+            self.metric_results_val_images['FID'] = calculate_metric(metric_data, self.opt['FID']).item()
+            self.metric_results_val['FID'] = self.metric_results_val_images['FID']
+        
 
-            self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
+        self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
+
+        # saving file with metrics
+        with open(osp.join(save_path, self.opt['path'].get('metric_names', 'metrics') + '.json')) as f:
+            json.dump(self.metric_results_val_images, f)
 
     def _log_validation_metric_values(self, current_iter, dataset_name, tb_logger):
         log_str = f'Validation {dataset_name}\n'
