@@ -209,8 +209,10 @@ class SRModel(BaseModel):
         self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
 
         # saving file with metrics
-        with open(osp.join(save_path, self.opt['path'].get('metric_names', 'metrics') + '.json'), 'w') as f:
-            json.dump(self.metric_results_val_images, f)
+        if save_img:
+            with open(osp.join(save_path, self.opt['path'].get('metric_names', 'metrics') + '.json'), 'w') as f:
+                json.dump(self.metric_results_val_images, f)
+        del self.metric_results_val_images
 
     def _log_validation_metric_values(self, current_iter, dataset_name, tb_logger):
         log_str = f'Validation {dataset_name}\n'
