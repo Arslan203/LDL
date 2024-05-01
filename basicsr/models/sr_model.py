@@ -57,16 +57,23 @@ class SRModel(BaseModel):
         # define losses
         if train_opt.get('pixel_opt'):
             self.cri_pix = build_loss(train_opt['pixel_opt']).to(self.device)
+            self.log_dict['l_g_pix'] = 0
         else:
             self.cri_pix = None
 
+        if train_opt.get('artifacts_opt'):
+            self.cri_artifacts = build_loss(train_opt['artifacts_opt']).to(self.device)
+            self.log_dict['l_g_artifacts'] = 0
+        else:
+            self.cri_artifacts = None
+
         if train_opt.get('perceptual_opt'):
             self.cri_perceptual = build_loss(train_opt['perceptual_opt']).to(self.device)
+            self.log_dict['l_g_percep'] = 0
+            if self.cri_perceptual.style_weight > 0:
+                self.log_dict['l_g_style'] = 0
         else:
             self.cri_perceptual = None
-
-        if self.cri_pix is None and self.cri_perceptual is None:
-            raise ValueError('Both pixel and perceptual losses are None.')
 
         self.with_metrics = self.opt.get('metrics') is not None
         if self.with_metrics:
@@ -76,6 +83,8 @@ class SRModel(BaseModel):
         # set up optimizers and schedulers
         self.setup_optimizers()
         self.setup_schedulers()
+
+        print(f'Using ema:{hasattr(self, "net_g_ema")}')
 
     def setup_optimizers(self):
         train_opt = self.opt['train']
@@ -99,7 +108,7 @@ class SRModel(BaseModel):
     def optimize_parameters(self, current_iter):
         self.optimizer_g.zero_grad()
         self.output = self.net_g(self.lq)
-        self.cycle_degredation()
+        # self.cycle_degredation()
 
         l_total = 0
         loss_dict = OrderedDict()
@@ -107,20 +116,21 @@ class SRModel(BaseModel):
         if self.cri_pix:
             l_pix = self.cri_pix(self.output, self.gt)
             l_total += l_pix
-            loss_dict['l_pix'] = l_pix
+            loss_dict['l_g_pix'] = l_pix
         # perceptual loss
         if self.cri_perceptual:
             l_percep, l_style = self.cri_perceptual(self.output, self.gt)
             if l_percep is not None:
                 l_total += l_percep
-                loss_dict['l_percep'] = l_percep
+                loss_dict['l_g_percep'] = l_percep
             if l_style is not None:
                 l_total += l_style
-                loss_dict['l_style'] = l_style
+                loss_dict['l_g_style'] = l_style
 
         l_total.backward()
         self.optimizer_g.step()
 
+        loss_dict |= self.calculate_metrics_on_iter()
         self.reduce_loss_dict(loss_dict)
 
         if self.ema_decay > 0:
