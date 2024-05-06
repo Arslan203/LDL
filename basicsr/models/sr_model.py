@@ -66,6 +66,12 @@ class SRModel(BaseModel):
             self.log_dict['l_g_artifacts'] = 0
         else:
             self.cri_artifacts = None
+        
+        if train_opt.get('finetune_opt'):
+            self.cri_finetune = build_loss(train_opt['finetune_opt'] | {'scale': self.opt['scale']}).to(self.device)
+            self.log_dict['l_g_finetune'] = 0
+        else:
+            self.cri_finetune = None
 
         if train_opt.get('perceptual_opt'):
             self.cri_perceptual = build_loss(train_opt['perceptual_opt']).to(self.device)
@@ -126,6 +132,10 @@ class SRModel(BaseModel):
             if l_style is not None:
                 l_total += l_style
                 loss_dict['l_g_style'] = l_style
+        if self.cri_finetune:
+            l_ft = self.cri_finetune(self.output, self.output)
+            loss_dict['l_g_finetune'] = l_ft
+            l_total += l_ft
 
         l_total.backward()
         self.optimizer_g.step()
