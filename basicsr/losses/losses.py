@@ -67,7 +67,7 @@ class FTLoss(nn.Module):
     """
 
     def __init__(self, loss_weight=1.0, reduction='mean', scale=4):
-        super(L1Loss, self).__init__()
+        super(FTLoss, self).__init__()
         if reduction not in ['none', 'mean', 'sum']:
             raise ValueError(f'Unsupported reduction mode: {reduction}. ' f'Supported ones are: {_reduction_modes}')
 
@@ -84,7 +84,7 @@ class FTLoss(nn.Module):
             weight (Tensor, optional): of shape (N, C, H, W). Element-wise
                 weights. Default: None.
         """
-        downsampled = torch.nn.functional.interpolate(pred, scale_factor=1 / self.scale, mode='linear')
+        downsampled = torch.nn.functional.interpolate(pred, scale_factor=1 / self.scale, mode='bicubic')
         return self.loss_weight * l1_loss(downsampled, target, weight, reduction=self.reduction)
 
 @LOSS_REGISTRY.register()

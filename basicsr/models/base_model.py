@@ -82,6 +82,8 @@ class BaseModel():
     def get_optimizer(self, optim_type, params, lr, **kwargs):
         if optim_type == 'Adam':
             optimizer = torch.optim.Adam(params, lr, **kwargs)
+        elif optim_type == 'SGD':
+            optimizer = torch.optim.SGD(params, lr, **kwargs)
         else:
             raise NotImplementedError(f'optimizer {optim_type} is not supperted yet.')
         return optimizer
@@ -271,7 +273,7 @@ class BaseModel():
             if param_key not in load_net and 'params' in load_net:
                 param_key = 'params'
                 logger.info('Loading: params_ema does not exist, use params.')
-            if 'BSRGAN.pth' not in load_path and 'BSRNet.pth' not in load_path and 'SwinIR' not in load_path:
+            if 'BSRGAN.pth' not in load_path and 'BSRNet.pth' not in load_path: #and 'SwinIR' not in load_path:
                 try:
                     load_net = load_net[param_key]
                 except:

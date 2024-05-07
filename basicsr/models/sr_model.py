@@ -133,7 +133,7 @@ class SRModel(BaseModel):
                 l_total += l_style
                 loss_dict['l_g_style'] = l_style
         if self.cri_finetune:
-            l_ft = self.cri_finetune(self.output, self.output)
+            l_ft = self.cri_finetune(self.output, self.lq)
             loss_dict['l_g_finetune'] = l_ft
             l_total += l_ft
 
